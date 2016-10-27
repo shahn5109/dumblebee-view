@@ -538,6 +538,10 @@ int CxSerialComm::ReadCommBlock( BYTE* pBlock, int nMaxLength )
 	// only try to read number of bytes in queue
 	::ClearCommError( m_hComm, &dwErrorFlags, &ComStat );
 	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue ) ;
+	if (nMaxLength < ComStat.cbInQue)
+	{
+		XTRACE( _T("Queue overflow: %d/%d\r\n"), ComStat.cbInQue, nMaxLength );
+	}
 	
 	if ( dwLength > 0 )
 	{
@@ -550,7 +554,7 @@ int CxSerialComm::ReadCommBlock( BYTE* pBlock, int nMaxLength )
 		{
 			if ( ::GetLastError() == ERROR_IO_PENDING )
 			{
-				XTRACE( TEXT("IO Pending\r\n") );
+				//XTRACE( TEXT("IO Pending\r\n") );
 				// We have to wait for read to complete.
 				// This function will timeout according to the
 				// CommTimeOuts.ReadTotalTimeoutConstant variable
@@ -677,6 +681,7 @@ unsigned int __stdcall CxSerialComm::CommWatchProc( LPVOID lpData )
 			{
 				do
 				{
+					memset(pcIn, 0, MAXBLOCK);
 					if ( nLength = pComm->ReadCommBlock( pcIn, MAXBLOCK ) )
 					{
 						pComm->OnReceive( pcIn, nLength ) ;
@@ -749,12 +754,12 @@ BOOL CxSerialComm::Open()
 		
 		COMMTIMEOUTS  CommTimeOuts;
 		// set up for overlapped I/O
-		CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
+		CommTimeOuts.ReadIntervalTimeout = 1;//MAXDWORD;
 		CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
 		CommTimeOuts.ReadTotalTimeoutConstant = 0;
 		// CBR_9600 is approximately 1byte/ms. For our purposes, allow
 		// double the expected time per character for a fudge factor.
-		CommTimeOuts.WriteTotalTimeoutMultiplier = 2*CBR_9600/m_dwBaudRate;
+		CommTimeOuts.WriteTotalTimeoutMultiplier = 0;//2*CBR_9600/m_dwBaudRate;
 		CommTimeOuts.WriteTotalTimeoutConstant = 0;
 		::SetCommTimeouts( m_hComm, &CommTimeOuts );
 	}
@@ -867,6 +872,7 @@ void CxSerialComm::OnReceive( BYTE* pData, int nSize )
 
 	if ( m_nFilledSize + nSize >= MAX_BUF_SIZE )
 	{
+		XTRACE( _T("OVERFLOW!!!!!!!!!!!! %d/%d\r\n"), m_nFilledSize + nSize, MAX_BUF_SIZE );
 		m_nFilledSize = 0;
 	}
 
